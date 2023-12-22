@@ -11,9 +11,30 @@ from ape.api.query import (
 )
 from ape.exceptions import QueryEngineError
 from ape.utils import singledispatchmethod
+from ape_ethereum import ecosystem
+
+from ape_subsquid.archive import Archive, Block
+
+
+def map_block(block: Block) -> ecosystem.Block:
+    return ecosystem.Block(
+        number=block["header"]["number"],
+        hash=block["header"]["hash"],
+        parentHash=block["header"]["parentHash"],
+        size=block["header"]["size"],
+        timestamp=int(block["header"]["timestamp"]),
+        num_transactions=len(block.get("transactions", [])),
+        gasLimit=block["header"]["gasLimit"],
+        gasUsed=block["header"]["gasUsed"],
+        baseFeePerGas=block["header"]["baseFeePerGas"],
+        difficulty=block["header"]["difficulty"],
+        totalDifficulty=block["header"]["totalDifficulty"],
+    )
 
 
 class SubsquidQueryEngine(QueryAPI):
+    _archive = Archive()
+
     @singledispatchmethod
     def estimate_query(self, query: QueryType) -> Optional[int]:
         return None
@@ -51,8 +72,40 @@ class SubsquidQueryEngine(QueryAPI):
         )
 
     @perform_query.register
-    def perform_block_query(self, query: BlockQuery):
-        return None
+    def perform_block_query(self, query: BlockQuery) -> Iterator[ecosystem.Block]:
+        from_block = query.start_block
+        while True:
+            data = self._archive.query(
+                {
+                    "fromBlock": from_block,
+                    "toBlock": query.stop_block,
+                    "fields": {
+                        "block": {
+                            "number": True,
+                            "hash": True,
+                            "parentHash": True,
+                            "size": True,
+                            "timestamp": True,
+                            "gasLimit": True,
+                            "gasUsed": True,
+                            "baseFeePerGas": True,
+                            "difficulty": True,
+                            "totalDifficulty": True,
+                        },
+                    },
+                    "includeAllBlocks": True,
+                    "transactions": [{}],
+                }
+            )
+
+            for block in data:
+                yield map_block(block)
+
+            last_block = data[-1]
+            if last_block["header"]["number"] == query.stop_block:
+                break
+
+            from_block = last_block["header"]["number"] + 1
 
     @perform_query.register
     def perform_block_transaction_query(self, query: BlockTransactionQuery):
