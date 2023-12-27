@@ -1,4 +1,4 @@
-from typing import Literal, NotRequired, Optional, TypedDict, Union
+from typing import Literal, Optional, TypedDict, Union
 
 from requests import Session
 
@@ -137,14 +137,14 @@ class TraceRequest(TypedDict, total=False):
     transactionLogs: bool
 
 
-class Query(TypedDict):
+class Query(TypedDict, total=False):
     fromBlock: int
-    toBlock: NotRequired[int]
-    includeAllBlocks: NotRequired[bool]
-    fields: NotRequired[FieldSelection]
-    transactions: NotRequired[list[TxRequest]]
-    logs: NotRequired[list[LogRequest]]
-    traces: NotRequired[list[TraceRequest]]
+    toBlock: int
+    includeAllBlocks: bool
+    fields: FieldSelection
+    transactions: list[TxRequest]
+    logs: list[LogRequest]
+    traces: list[TraceRequest]
 
 
 class BlockHeader(TypedDict):
@@ -213,17 +213,17 @@ class TraceCreateActionResult(TypedDict):
     address: str
 
 
-class Trace(TypedDict):
+class Trace(TypedDict, total=False):
     type: TraceType
     transactionIndex: int
-    result: NotRequired[TraceCreateActionResult]
+    result: TraceCreateActionResult
 
 
-class Block(TypedDict):
+class Block(TypedDict, total=False):
     header: BlockHeader
-    logs: NotRequired[list[Log]]
-    transactions: NotRequired[list[Transaction]]
-    traces: NotRequired[list[Trace]]
+    logs: list[Log]
+    transactions: list[Transaction]
+    traces: list[Trace]
 
 
 class Archive:
