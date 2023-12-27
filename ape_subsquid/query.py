@@ -1,4 +1,4 @@
-from typing import Iterator, Optional
+from typing import Iterator, Optional, Type, TypeVar, cast
 
 from ape.api import BlockAPI, ReceiptAPI
 from ape.api.query import (
@@ -14,7 +14,30 @@ from ape.types import ContractLog
 from ape.utils import singledispatchmethod
 from ethpm_types import HexBytes
 
-from ape_subsquid.archive import Archive, BlockHeader, Log, Transaction
+from ape_subsquid.archive import (
+    Archive,
+    Block,
+    BlockFieldSelection,
+    BlockHeader,
+    Log,
+    LogFieldSelection,
+    Query,
+    Transaction,
+    TxFieldSelection,
+)
+
+T = TypeVar("T")
+
+
+def all_fields(cls: Type[T]) -> T:
+    fields = cls.__annotations__
+    for field in fields:
+        fields[field] = True
+    return cast(T, fields)
+
+
+def hex_to_int(value: str):
+    return int(value, 16)
 
 
 def map_header(value: BlockHeader, transactions: list[Transaction]) -> dict:
@@ -22,12 +45,12 @@ def map_header(value: BlockHeader, transactions: list[Transaction]) -> dict:
         "number": value["number"],
         "hash": HexBytes(value["hash"]),
         "parentHash": HexBytes(value["parentHash"]),
-        "baseFeePerGas": value["baseFeePerGas"] and int(value["baseFeePerGas"], 16),
-        "difficulty": int(value["difficulty"], 16),
-        "totalDifficulty": int(value["totalDifficulty"], 16),
+        "baseFeePerGas": value["baseFeePerGas"] and hex_to_int(value["baseFeePerGas"]),
+        "difficulty": hex_to_int(value["difficulty"]),
+        "totalDifficulty": hex_to_int(value["totalDifficulty"]),
         "extraData": HexBytes(value["extraData"]),
-        "gasLimit": int(value["gasLimit"], 16),
-        "gasUsed": int(value["gasUsed"], 16),
+        "gasLimit": hex_to_int(value["gasLimit"]),
+        "gasUsed": hex_to_int(value["gasUsed"]),
         "logsBloom": HexBytes(value["logsBloom"]),
         "miner": value["miner"],
         "mixHash": HexBytes(value["mixHash"]),
@@ -57,22 +80,22 @@ def map_receipt(
         "status": value["status"],
         "chainId": value["chainId"],
         "contractAddress": value["contractAddress"],
-        "cumulativeGasUsed": int(value["cumulativeGasUsed"], 16),
-        "effectiveGasPrice": int(value["effectiveGasPrice"], 16),
-        "gas": int(value["gas"], 16),
-        "gasPrice": int(value["gasPrice"], 16),
-        "gasUsed": int(value["gasUsed"], 16),
+        "cumulativeGasUsed": hex_to_int(value["cumulativeGasUsed"]),
+        "effectiveGasPrice": hex_to_int(value["effectiveGasPrice"]),
+        "gas": hex_to_int(value["gas"]),
+        "gasPrice": hex_to_int(value["gasPrice"]),
+        "gasUsed": hex_to_int(value["gasUsed"]),
         "input": HexBytes(value["input"]),
-        "maxFeePerGas": value["maxFeePerGas"] and int(value["maxFeePerGas"], 16),
+        "maxFeePerGas": value["maxFeePerGas"] and hex_to_int(value["maxFeePerGas"]),
         "maxPriorityFeePerGas": value["maxPriorityFeePerGas"]
-        and int(value["maxPriorityFeePerGas"], 16),
+        and hex_to_int(value["maxPriorityFeePerGas"]),
         "nonce": value["nonce"],
-        "v": int(value["v"], 16),
+        "v": hex_to_int(value["v"]),
         "r": HexBytes(value["r"]),
         "s": HexBytes(value["s"]),
         "transactionIndex": value["transactionIndex"],
         "type": value["type"],
-        "value": int(value["value"], 16),
+        "value": hex_to_int(value["value"]),
         "yParity": value["yParity"],
         "transactionHash": HexBytes(value["hash"]),
         "logs": logs,
@@ -90,6 +113,19 @@ def map_log(value: Log, block_number: int, block_hash: HexBytes) -> dict:
         "data": HexBytes(value["data"]),
         "topics": [HexBytes(topic) for topic in value["topics"]],
     }
+
+
+def archive_ingest(archive: Archive, query: Query) -> Iterator[list[Block]]:
+    while True:
+        data = archive.query(query)
+        yield data
+
+        last_block = data[-1]
+        if "toBlock" in query:
+            if last_block["header"]["number"] == query["toBlock"]:
+                break
+
+        query["fromBlock"] = last_block["header"]["number"] + 1
 
 
 class SubsquidQueryEngine(QueryAPI):
@@ -123,95 +159,40 @@ class SubsquidQueryEngine(QueryAPI):
 
     @perform_query.register
     def perform_block_query(self, query: BlockQuery) -> Iterator[BlockAPI]:
-        from_block = query.start_block
-        while True:
-            data = self._archive.query(
-                {
-                    "fromBlock": from_block,
-                    "toBlock": query.stop_block,
-                    "fields": {
-                        "block": {
-                            "number": True,
-                            "hash": True,
-                            "parentHash": True,
-                            "size": True,
-                            "timestamp": True,
-                            "gasLimit": True,
-                            "gasUsed": True,
-                            "baseFeePerGas": True,
-                            "difficulty": True,
-                            "totalDifficulty": True,
-                        },
-                    },
-                    "includeAllBlocks": True,
-                    "transactions": [{}],
-                }
-            )
+        q: Query = {
+            "fromBlock": query.start_block,
+            "toBlock": query.stop_block,
+            "fields": {"block": all_fields(BlockFieldSelection)},
+            "includeAllBlocks": True,
+            "transactions": [{}],
+        }
 
+        for data in archive_ingest(self._archive, q):
             for block in data:
                 header_data = map_header(block["header"], block["transactions"])
                 yield self.provider.network.ecosystem.decode_block(header_data)
-
-            last_block = data[-1]
-            if last_block["header"]["number"] == query.stop_block:
-                break
-
-            from_block = last_block["header"]["number"] + 1
 
     @perform_query.register
     def perform_account_transaction_query(
         self, query: AccountTransactionQuery
     ) -> Iterator[ReceiptAPI]:
-        from_block = 0
-        while True:
-            data = self._archive.query(
+        q: Query = {
+            "fromBlock": 0,
+            "fields": {
+                "transaction": all_fields(TxFieldSelection),
+                "log": all_fields(LogFieldSelection),
+            },
+            "transactions": [
                 {
-                    "fromBlock": from_block,
-                    "fields": {
-                        "transaction": {
-                            "from": True,
-                            "to": True,
-                            "hash": True,
-                            "status": True,
-                            "chainId": True,
-                            "contractAddress": True,
-                            "cumulativeGasUsed": True,
-                            "effectiveGasPrice": True,
-                            "gas": True,
-                            "gasPrice": True,
-                            "gasUsed": True,
-                            "input": True,
-                            "maxFeePerGas": True,
-                            "maxPriorityFeePerGas": True,
-                            "nonce": True,
-                            "v": True,
-                            "r": True,
-                            "s": True,
-                            "transactionIndex": True,
-                            "type": True,
-                            "value": True,
-                            "yParity": True,
-                        },
-                        "log": {
-                            "address": True,
-                            "data": True,
-                            "logIndex": True,
-                            "topics": True,
-                            "transactionHash": True,
-                            "transactionIndex": True,
-                        },
-                    },
-                    "transactions": [
-                        {
-                            "from": [query.account.lower()],
-                            "logs": True,
-                            "firstNonce": query.start_nonce,
-                            "lastNonce": query.stop_nonce,
-                        }
-                    ],
+                    "from": [query.account.lower()],
+                    "logs": True,
+                    "firstNonce": query.start_nonce,
+                    "lastNonce": query.stop_nonce,
                 }
-            )
+            ],
+        }
 
+        for data in archive_ingest(self._archive, q):
             for block in data:
                 for tx in block["transactions"]:
                     assert tx["nonce"] >= query.start_nonce
@@ -219,145 +200,74 @@ class SubsquidQueryEngine(QueryAPI):
 
                     block_number = block["header"]["number"]
                     block_hash = HexBytes(block["header"]["hash"])
-
-                    logs = []
-                    for log in block["logs"]:
-                        if log["transactionIndex"] == tx["transactionIndex"]:
-                            log_data = map_log(log, block_number, block_hash)
-                            logs.append(log_data)
-
+                    logs = [
+                        map_log(log, block_number, block_hash)
+                        for log in block["logs"]
+                        if log["transactionIndex"] == tx["transactionIndex"]
+                    ]
                     receipt_data = map_receipt(tx, block_number, block_hash, logs)
-                    receipt = self.provider.network.ecosystem.decode_receipt(receipt_data)
-                    yield receipt
+
+                    yield self.provider.network.ecosystem.decode_receipt(receipt_data)
 
                     if tx["nonce"] == query.stop_nonce:
                         return
 
-            last_block = data[-1]
-            from_block = last_block["header"]["number"] + 1
-
     @perform_query.register
     def perform_contract_creation_query(self, query: ContractCreationQuery) -> Iterator[ReceiptAPI]:
-        from_block = query.start_block
-        while True:
-            data = self._archive.query(
-                {
-                    "fromBlock": from_block,
-                    "toBlock": query.stop_block,
-                    "fields": {
-                        "transaction": {
-                            "from": True,
-                            "to": True,
-                            "hash": True,
-                            "status": True,
-                            "chainId": True,
-                            "contractAddress": True,
-                            "cumulativeGasUsed": True,
-                            "effectiveGasPrice": True,
-                            "gas": True,
-                            "gasPrice": True,
-                            "gasUsed": True,
-                            "input": True,
-                            "maxFeePerGas": True,
-                            "maxPriorityFeePerGas": True,
-                            "nonce": True,
-                            "v": True,
-                            "r": True,
-                            "s": True,
-                            "transactionIndex": True,
-                            "type": True,
-                            "value": True,
-                            "yParity": True,
-                        },
-                        "log": {
-                            "address": True,
-                            "data": True,
-                            "logIndex": True,
-                            "topics": True,
-                            "transactionHash": True,
-                            "transactionIndex": True,
-                        },
-                        "trace": {
-                            "transactionIndex": True,
-                            "createResultAddress": True,
-                        },
-                    },
-                    "traces": [{"type": ["create"], "transaction": True, "transactionLogs": True}],
-                }
-            )
+        q: Query = {
+            "fromBlock": query.start_block,
+            "toBlock": query.stop_block,
+            "fields": {
+                "transaction": all_fields(TxFieldSelection),
+                "log": all_fields(LogFieldSelection),
+                "trace": {
+                    "transactionIndex": True,
+                    "createResultAddress": True,
+                },
+            },
+            "traces": [{"type": ["create"], "transaction": True, "transactionLogs": True}],
+        }
 
+        for data in archive_ingest(self._archive, q):
             for block in data:
                 for trace in block["traces"]:
                     if "result" in trace:
                         if trace["result"]["address"] == query.contract:
                             block_number = block["header"]["number"]
                             block_hash = HexBytes(block["header"]["hash"])
-                            tx = next(
-                                (
-                                    tx
-                                    for tx in block["transactions"]
-                                    if tx["transactionIndex"] == trace["transactionIndex"]
-                                )
-                            )
-
-                            logs = []
-                            for log in block["logs"]:
-                                if log["transactionIndex"] == tx["transactionIndex"]:
-                                    log_data = map_log(log, block_number, block_hash)
-                                    logs.append(log_data)
-
+                            tx = (
+                                tx
+                                for tx in block["transactions"]
+                                if tx["transactionIndex"] == trace["transactionIndex"]
+                            ).__next__()
+                            logs = [
+                                map_log(log, block_number, block_hash)
+                                for log in block["logs"]
+                                if log["transactionIndex"] == tx["transactionIndex"]
+                            ]
                             receipt_data = map_receipt(tx, block_number, block_hash, logs)
-                            receipt = self.provider.network.ecosystem.decode_receipt(receipt_data)
-                            yield receipt
+
+                            yield self.provider.network.ecosystem.decode_receipt(receipt_data)
                             return
-
-            last_block = data[-1]
-            if last_block["header"]["number"] == query.stop_block:
-                break
-
-            from_block = last_block["header"]["number"] + 1
 
     @perform_query.register
     def perform_contract_event_query(self, query: ContractEventQuery) -> Iterator[ContractLog]:
-        from_block = query.start_block
-
         if isinstance(query.contract, list):
             address = [address.lower() for address in query.contract]
         else:
             address = [query.contract.lower()]
 
-        while True:
-            data = self._archive.query(
-                {
-                    "fromBlock": from_block,
-                    "toBlock": query.stop_block,
-                    "fields": {
-                        "log": {
-                            "address": True,
-                            "data": True,
-                            "logIndex": True,
-                            "topics": True,
-                            "transactionHash": True,
-                            "transactionIndex": True,
-                        },
-                    },
-                    "logs": [{"address": address}],
-                }
-            )
+        q: Query = {
+            "fromBlock": query.start_block,
+            "toBlock": query.stop_block,
+            "fields": {"log": all_fields(LogFieldSelection)},
+            "logs": [{"address": address}],
+        }
 
+        for data in archive_ingest(self._archive, q):
             for block in data:
                 block_number = block["header"]["number"]
                 block_hash = HexBytes(block["header"]["hash"])
-
-                logs = []
-                for log in block["logs"]:
-                    log_data = map_log(log, block_number, block_hash)
-                    logs.append(log_data)
+                logs = [map_log(log, block_number, block_hash) for log in block["logs"]]
 
                 yield from self.provider.network.ecosystem.decode_logs(logs, query.event)
-
-            last_block = data[-1]
-            if last_block["header"]["number"] == query.stop_block:
-                break
-
-            from_block = last_block["header"]["number"] + 1

@@ -1,5 +1,5 @@
 # BlockQuery
-chain.blocks[18000000]
+chain.blocks.query("*", stop_block=20)
 
 # ContractEventQuery
 contract = Contract(
