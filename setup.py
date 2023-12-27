@@ -60,7 +60,9 @@ setup(
     author_email="admin@apeworx.io",
     url="https://github.com/ApeWorX/<REPO_NAME>",
     include_package_data=True,
-    install_requires=["eth-ape>=0.6.27,<0.7"],
+    install_requires=[
+        "eth-ape>=0.7.0,<0.8",
+    ],
     python_requires=">=3.8,<4",
     extras_require=extras_require,
     py_modules=["ape_subsquid"],
