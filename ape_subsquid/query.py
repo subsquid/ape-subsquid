@@ -12,7 +12,7 @@ from ape.api.query import (
 from ape.exceptions import QueryEngineError
 from ape.types import ContractLog
 from ape.utils import singledispatchmethod
-from ethpm_types import HexBytes
+from hexbytes import HexBytes
 
 from ape_subsquid.archive import (
     Archive,
@@ -132,7 +132,7 @@ class SubsquidQueryEngine(QueryAPI):
     _archive = Archive()
 
     @singledispatchmethod
-    def estimate_query(self, query: QueryType) -> Optional[int]:
+    def estimate_query(self, query: QueryType) -> Optional[int]:  # type: ignore[override]
         return None
 
     @estimate_query.register
@@ -152,7 +152,7 @@ class SubsquidQueryEngine(QueryAPI):
         return 0
 
     @singledispatchmethod
-    def perform_query(self, query: QueryType) -> Iterator:
+    def perform_query(self, query: QueryType) -> Iterator:  # type: ignore[override]
         raise QueryEngineError(
             f"{self.__class__.__name__} cannot handle {query.__class__.__name__} queries."
         )
