@@ -1,6 +1,9 @@
 from typing import Literal, Optional, TypedDict, Union
 
-from requests import Session
+from requests import Response, Session
+from requests.exceptions import HTTPError
+
+from ape_subsquid.exceptions import ApeSubsquidError, DataIsNotAvailable, NotReadyToServeError
 
 TraceType = Union[Literal["create"], Literal["call"], Literal["reward"], Literal["suicide"]]
 
@@ -229,14 +232,27 @@ class Block(TypedDict, total=False):
 class Archive:
     _session = Session()
 
-    def get_worker(self, start_block: int) -> str:
-        url = f"https://v2.archive.subsquid.io/network/ethereum-mainnet/{start_block}/worker"
+    def get_worker(self, network: str, start_block: int) -> str:
+        url = f"https://v2.archive.subsquid.io/network/{network}/{start_block}/worker"
         response = self._session.get(url)
-        response.raise_for_status()
+        self._check_response(response)
         return response.text
 
-    def query(self, query: Query) -> list[Block]:
-        worker_url = self.get_worker(query["fromBlock"])
+    def query(self, network: str, query: Query) -> list[Block]:
+        worker_url = self.get_worker(network, query["fromBlock"])
         response = self._session.post(worker_url, json=query)
-        response.raise_for_status()
+        self._check_response(response)
         return response.json()
+
+    def _check_response(self, response: Response):
+        try:
+            response.raise_for_status()
+        except HTTPError:
+            text = response.text
+
+            if "not ready to serve block" in text:
+                raise NotReadyToServeError(text)
+            elif "is not available" in text:
+                raise DataIsNotAvailable(text)
+            else:
+                raise ApeSubsquidError(text)
