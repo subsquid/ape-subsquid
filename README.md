@@ -1,6 +1,6 @@
 # Quick Start
 
-TODO: Description
+This plugin allows to use [subsquid data lake](https://docs.subsquid.io/subsquid-network/overview/) as a backend for ApeWorX query engine. A list of supported networks can be found [here](https://docs.subsquid.io/subsquid-network/reference/evm-networks/).
 
 ## Dependencies
 
@@ -28,7 +28,21 @@ python3 setup.py install
 
 ## Quick Usage
 
-TODO: Describe library overview in code
+If we want to be sure that subsquid engine is used then we have to specify it explicitly. Otherwise other query engines might be preferred depending on their estimated time.
+
+The following queries can be executed via ApeWorX interactive console. Use `ape console --network ethereum:mainnet:geth` to run a console session.
+
+```python
+# BlockQuery
+chain.blocks.query("*", stop_block=18_000_000, stop_block=18_000_010, engine_to_use='subsquid')
+
+# ContractEventQuery
+contract = Contract('0xdac17f958d2ee523a2206206994597c13d831ec7', abi='<USDT_ABI>')
+contract.Transfer.query('*', start_block=18_000_000, stop_block=18_000_000, engine_to_use='subsquid')
+```
+
+Supported queries are: `BlockQuery`, `AccountTransactionQuery`, `ContractCreationQuery`, `ContractEventQuery`.
+More info about querying data can be found in the [corresponding guide](https://docs.apeworx.io/ape/stable/userguides/data.html).
 
 ## Development
 
