@@ -34,19 +34,21 @@ class SubsquidQueryEngine(QueryAPI):
 
     @estimate_query.register
     def estimate_block_query(self, query: BlockQuery) -> int:
-        return 0
+        return 100 + (query.stop_block - query.start_block) * 4
 
     @estimate_query.register
     def estimate_account_transaction_query(self, query: AccountTransactionQuery) -> int:
-        return 0
+        # the entire network can be scanned in a worst-case scenario
+        # so just high value is used (10 min)
+        return 1000 * 60 * 10
 
     @estimate_query.register
     def estimate_contract_creation_query(self, query: ContractCreationQuery) -> int:
-        return 0
+        return 100 + (query.stop_block - query.start_block) * 5
 
     @estimate_query.register
     def estimate_contract_event_query(self, query: ContractEventQuery) -> int:
-        return 0
+        return 400 + (query.stop_block - query.start_block) * 4
 
     @singledispatchmethod
     def perform_query(self, query: QueryType) -> Iterator:  # type: ignore[override]
