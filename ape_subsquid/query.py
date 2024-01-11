@@ -116,6 +116,7 @@ class SubsquidQueryEngine(QueryAPI):
     @perform_query.register
     def perform_contract_creation_query(self, query: ContractCreationQuery) -> Iterator[ReceiptAPI]:
         network = get_network(self)
+        contract = query.contract.lower()
         q: Query = {
             "fromBlock": query.start_block,
             "toBlock": query.stop_block,
@@ -127,30 +128,32 @@ class SubsquidQueryEngine(QueryAPI):
                     "createResultAddress": True,
                 },
             },
-            "traces": [{"type": ["create"], "transaction": True, "transactionLogs": True}],
+            "traces": [
+                {"createResultAddress": [contract], "transaction": True, "transactionLogs": True}
+            ],
         }
 
         for data in archive_ingest(self._archive, network, q):
             for block in data:
                 for trace in block["traces"]:
-                    if "result" in trace:
-                        if trace["result"]["address"] == query.contract:
-                            block_number = block["header"]["number"]
-                            block_hash = HexBytes(block["header"]["hash"])
-                            tx = (
-                                tx
-                                for tx in block["transactions"]
-                                if tx["transactionIndex"] == trace["transactionIndex"]
-                            ).__next__()
-                            logs = [
-                                map_log(log, block_number, block_hash)
-                                for log in block["logs"]
-                                if log["transactionIndex"] == tx["transactionIndex"]
-                            ]
-                            receipt_data = map_receipt(tx, block_number, block_hash, logs)
+                    assert trace["result"]["address"] == contract
 
-                            yield self.provider.network.ecosystem.decode_receipt(receipt_data)
-                            return
+                    block_number = block["header"]["number"]
+                    block_hash = HexBytes(block["header"]["hash"])
+                    tx = (
+                        tx
+                        for tx in block["transactions"]
+                        if tx["transactionIndex"] == trace["transactionIndex"]
+                    ).__next__()
+                    logs = [
+                        map_log(log, block_number, block_hash)
+                        for log in block["logs"]
+                        if log["transactionIndex"] == tx["transactionIndex"]
+                    ]
+                    receipt_data = map_receipt(tx, block_number, block_hash, logs)
+
+                    yield self.provider.network.ecosystem.decode_receipt(receipt_data)
+                    return
 
     @perform_query.register
     def perform_contract_event_query(self, query: ContractEventQuery) -> Iterator[ContractLog]:

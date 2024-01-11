@@ -138,6 +138,7 @@ class LogRequest(TypedDict, total=False):
 
 class TraceRequest(TypedDict, total=False):
     type: list[TraceType]
+    createResultAddress: list[str]
     transaction: bool
     transactionLogs: bool
 
