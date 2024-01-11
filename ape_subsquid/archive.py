@@ -1,5 +1,7 @@
+from time import sleep
 from typing import Literal, Optional, TypedDict, Union
 
+from ape.logging import logger
 from requests import Response, Session
 from requests.exceptions import HTTPError
 
@@ -231,28 +233,45 @@ class Block(TypedDict, total=False):
 
 class Archive:
     _session = Session()
+    _retry_schedule = [5, 10, 20, 30, 60]
 
     def get_worker(self, network: str, start_block: int) -> str:
         url = f"https://v2.archive.subsquid.io/network/{network}/{start_block}/worker"
-        response = self._session.get(url)
-        self._check_response(response)
+        response = self._request("GET", url)
         return response.text
 
     def query(self, network: str, query: Query) -> list[Block]:
         worker_url = self.get_worker(network, query["fromBlock"])
-        response = self._session.post(worker_url, json=query)
-        self._check_response(response)
+        response = self._request("POST", worker_url, json=query)
         return response.json()
 
-    def _check_response(self, response: Response):
-        try:
-            response.raise_for_status()
-        except HTTPError:
-            text = response.text
-
-            if "not ready to serve block" in text:
-                raise NotReadyToServeError(text)
-            elif "is not available" in text:
-                raise DataIsNotAvailable(text)
+    def _request(self, *args, **kwargs) -> Response:
+        retries = 0
+        while True:
+            response = self._session.request(*args, **kwargs)
+            try:
+                response.raise_for_status()
+            except HTTPError as e:
+                if self._is_retryable_error(e) and retries < len(self._retry_schedule):
+                    pause = self._retry_schedule[retries]
+                    retries += 1
+                    logger.warning(f"archive request failed, will retry in {pause} secs")
+                    sleep(pause)
+                else:
+                    self._raise_error(e)
             else:
-                raise ApeSubsquidError(text)
+                return response
+
+    def _is_retryable_error(self, error: HTTPError) -> bool:
+        assert error.response
+        return error.response.status_code == 503
+
+    def _raise_error(self, error: HTTPError) -> ApeSubsquidError:
+        assert error.response
+        text = error.response.text
+        if "not ready to serve block" in text:
+            raise NotReadyToServeError(text)
+        elif "is not available" in text:
+            raise DataIsNotAvailable(text)
+        else:
+            raise ApeSubsquidError(text)
