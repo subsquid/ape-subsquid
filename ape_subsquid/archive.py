@@ -1,8 +1,8 @@
 from time import sleep
-from typing import Literal, Optional, TypedDict, Union
+from typing import Callable, Literal, Optional, TypedDict, TypeVar, Union
 
 from ape.logging import logger
-from requests import Response, Session
+from requests import Session
 from requests.exceptions import HTTPError
 
 from ape_subsquid.exceptions import ApeSubsquidError, DataIsNotAvailable, NotReadyToServeError
@@ -232,26 +232,33 @@ class Block(TypedDict, total=False):
     traces: list[Trace]
 
 
+T = TypeVar("T")
+
+
 class Archive:
     _session = Session()
     _retry_schedule = [5, 10, 20, 30, 60]
 
-    def get_worker(self, network: str, start_block: int) -> str:
-        url = f"https://v2.archive.subsquid.io/network/{network}/{start_block}/worker"
-        response = self._request("GET", url)
-        return response.text
-
     def query(self, network: str, query: Query) -> list[Block]:
-        worker_url = self.get_worker(network, query["fromBlock"])
-        response = self._request("POST", worker_url, json=query)
+        return self._retry(self._query, network, query)
+
+    def _query(self, network: str, query: Query) -> list[Block]:
+        worker_url = self._get_worker(network, query["fromBlock"])
+        response = self._session.post(worker_url, json=query)
+        response.raise_for_status()
         return response.json()
 
-    def _request(self, *args, **kwargs) -> Response:
+    def _get_worker(self, network: str, start_block: int) -> str:
+        url = f"https://v2.archive.subsquid.io/network/{network}/{start_block}/worker"
+        response = self._session.get(url)
+        response.raise_for_status()
+        return response.text
+
+    def _retry(self, request: Callable[..., T], *args, **kwargs) -> T:
         retries = 0
         while True:
-            response = self._session.request(*args, **kwargs)
             try:
-                response.raise_for_status()
+                response = request(*args, **kwargs)
             except HTTPError as e:
                 if self._is_retryable_error(e) and retries < len(self._retry_schedule):
                     pause = self._retry_schedule[retries]
