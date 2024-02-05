@@ -23,6 +23,7 @@ from ape_subsquid.archive import (
     TxFieldSelection,
 )
 from ape_subsquid.mappings import map_header, map_log, map_receipt
+from ape_subsquid.networks import get_network
 
 
 class SubsquidQueryEngine(QueryAPI):
@@ -200,9 +201,3 @@ def archive_ingest(archive: Archive, network: str, query: Query) -> Iterator[lis
                 break
 
         query["fromBlock"] = last_block["header"]["number"] + 1
-
-
-def get_network(engine: QueryAPI) -> str:
-    ecosystem_name = engine.network_manager.ecosystem.name
-    network_name = engine.network_manager.network.name
-    return f"{ecosystem_name}-{network_name}"

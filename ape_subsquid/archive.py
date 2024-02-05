@@ -271,11 +271,11 @@ class Archive:
                 return response
 
     def _is_retryable_error(self, error: HTTPError) -> bool:
-        assert error.response
+        assert error.response is not None
         return error.response.status_code == 503
 
     def _raise_error(self, error: HTTPError) -> ApeSubsquidError:
-        assert error.response
+        assert error.response is not None
         text = error.response.text
         if "not ready to serve block" in text:
             raise NotReadyToServeError(text)
