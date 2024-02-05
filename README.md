@@ -21,7 +21,7 @@ pip install ape-subsquid
 You can clone the repository and use [`setuptools`](https://github.com/pypa/setuptools) for the most up-to-date version:
 
 ```bash
-git clone https://github.com/ApeWorX/ape-subsquid.git
+git clone https://github.com/subsquid/ape-subsquid.git
 cd ape-subsquid
 python3 setup.py install
 ```
@@ -34,11 +34,11 @@ The following queries can be executed via ApeWorX interactive console. Use `ape 
 
 ```python
 # BlockQuery
-chain.blocks.query("*", stop_block=18_000_000, stop_block=18_000_010, engine_to_use='subsquid')
+chain.blocks.query("*", start_block=18_000_000, stop_block=18_000_010, engine_to_use='subsquid')
 
 # ContractEventQuery
 contract = Contract('0xdac17f958d2ee523a2206206994597c13d831ec7', abi='<USDT_ABI>')
-contract.Transfer.query('*', start_block=18_000_000, stop_block=18_000_000, engine_to_use='subsquid')
+contract.Transfer.query('*', start_block=18_000_000, stop_block=18_000_100, engine_to_use='subsquid')
 ```
 
 Supported queries are: `BlockQuery`, `AccountTransactionQuery`, `ContractCreationQuery`, `ContractEventQuery`.
