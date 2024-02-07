@@ -6,6 +6,7 @@ from requests import Session
 from requests.exceptions import HTTPError
 
 from ape_subsquid.exceptions import ApeSubsquidError, DataIsNotAvailable, NotReadyToServeError
+from ape_subsquid.utils import ttl_cache
 
 TraceType = Union[Literal["create"], Literal["call"], Literal["reward"], Literal["suicide"]]
 
@@ -239,6 +240,10 @@ class Archive:
     _session = Session()
     _retry_schedule = [5, 10, 20, 30, 60]
 
+    @ttl_cache(seconds=30)
+    def get_height(self, network: str) -> int:
+        return self._retry(self._get_height, network)
+
     def query(self, network: str, query: Query) -> list[Block]:
         return self._retry(self._query, network, query)
 
@@ -254,6 +259,12 @@ class Archive:
         response.raise_for_status()
         return response.text
 
+    def _get_height(self, network: str) -> int:
+        url = f"https://v2.archive.subsquid.io/network/{network}/height"
+        response = self._session.get(url)
+        response.raise_for_status()
+        return int(response.text)
+
     def _retry(self, request: Callable[..., T], *args, **kwargs) -> T:
         retries = 0
         while True:
@@ -263,7 +274,7 @@ class Archive:
                 if self._is_retryable_error(e) and retries < len(self._retry_schedule):
                     pause = self._retry_schedule[retries]
                     retries += 1
-                    logger.warning(f"archive request failed, will retry in {pause} secs")
+                    logger.warning(f"Archive request failed, will retry in {pause} secs")
                     sleep(pause)
                 else:
                     self._raise_error(e)
@@ -277,9 +288,9 @@ class Archive:
     def _raise_error(self, error: HTTPError) -> ApeSubsquidError:
         assert error.response is not None
         text = error.response.text
-        if "not ready to serve block" in text:
+        if "Not ready to serve block" in text:
             raise NotReadyToServeError(text)
-        elif "is not available" in text:
+        elif "Is not available" in text:
             raise DataIsNotAvailable(text)
         else:
             raise ApeSubsquidError(text)

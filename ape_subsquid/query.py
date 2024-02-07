@@ -10,6 +10,7 @@ from ape.api.query import (
     QueryType,
 )
 from ape.exceptions import QueryEngineError
+from ape.logging import logger
 from ape.types import ContractLog
 from ape.utils import singledispatchmethod
 from hexbytes import HexBytes
@@ -22,6 +23,7 @@ from ape_subsquid.archive import (
     Query,
     TxFieldSelection,
 )
+from ape_subsquid.exceptions import DataRangeIsNotAvailable
 from ape_subsquid.mappings import map_header, map_log, map_receipt
 from ape_subsquid.networks import get_network
 
@@ -190,14 +192,23 @@ def all_fields(cls: Type[T]) -> T:
     return cast(T, fields)
 
 
+def ensure_range_is_available(archive: Archive, network: str, query: Query):
+    height = archive.get_height(network)
+    if query["toBlock"] > height:
+        range = (query["fromBlock"], query["toBlock"])
+        raise DataRangeIsNotAvailable(range, height)
+
+
 def archive_ingest(archive: Archive, network: str, query: Query) -> Iterator[list[Block]]:
+    ensure_range_is_available(archive, network, query)
     while True:
         data = archive.query(network, query)
         yield data
 
-        last_block = data[-1]
+        last_block = data[-1]["header"]["number"]
+        logger.info(f"Done fetching the range ({query['fromBlock']}, {last_block})")
         if "toBlock" in query:
-            if last_block["header"]["number"] == query["toBlock"]:
+            if last_block == query["toBlock"]:
                 break
 
-        query["fromBlock"] = last_block["header"]["number"] + 1
+        query["fromBlock"] = last_block + 1
