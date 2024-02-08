@@ -1,10 +1,7 @@
 from hexbytes import HexBytes
 
 from ape_subsquid.archive import BlockHeader, Log, Transaction
-
-
-def hex_to_int(value: str):
-    return int(value, 16)
+from ape_subsquid.utils import hex_to_int
 
 
 def map_header(value: BlockHeader, transactions: list[Transaction]) -> dict:

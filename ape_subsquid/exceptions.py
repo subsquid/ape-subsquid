@@ -9,8 +9,7 @@ class ApeSubsquidError(ApeException):
 
 class NotReadyToServeError(ApeSubsquidError):
     """
-    Raised when archive isn't ready to serve a specific block
-    or a network isn't supported.
+    Raised when subsquid network isn't ready to serve a specific block.
     """
 
 
@@ -18,3 +17,12 @@ class DataIsNotAvailable(ApeSubsquidError):
     """
     Raised when a specific worker has no requested data.
     """
+
+
+class DataRangeIsNotAvailable(ApeSubsquidError):
+    """
+    Raised when subsquid network doesn't cover the requested data range.
+    """
+
+    def __init__(self, range: tuple[int, int], height: int) -> None:
+        super().__init__(f"Range {range} isn't covered. Last available block is {height}.")
