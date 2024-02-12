@@ -15,21 +15,21 @@ from ape.types import ContractLog
 from ape.utils import singledispatchmethod
 from hexbytes import HexBytes
 
-from ape_subsquid.archive import (
-    Archive,
+from ape_subsquid.exceptions import DataRangeIsNotAvailable
+from ape_subsquid.gateway import (
     Block,
     BlockFieldSelection,
     LogFieldSelection,
     Query,
+    SubsquidGateway,
     TxFieldSelection,
 )
-from ape_subsquid.exceptions import DataRangeIsNotAvailable
 from ape_subsquid.mappings import map_header, map_log, map_receipt
 from ape_subsquid.networks import get_network
 
 
 class SubsquidQueryEngine(QueryAPI):
-    _archive = Archive()
+    _gateway = SubsquidGateway()
 
     @singledispatchmethod
     def estimate_query(self, query: QueryType) -> Optional[int]:  # type: ignore[override]
@@ -70,7 +70,7 @@ class SubsquidQueryEngine(QueryAPI):
             "transactions": [{}],
         }
 
-        for data in archive_ingest(self._archive, network, q):
+        for data in gateway_ingest(self._gateway, network, q):
             for block in data:
                 header_data = map_header(block["header"], block["transactions"])
                 yield self.provider.network.ecosystem.decode_block(header_data)
@@ -96,7 +96,7 @@ class SubsquidQueryEngine(QueryAPI):
             ],
         }
 
-        for data in archive_ingest(self._archive, network, q):
+        for data in gateway_ingest(self._gateway, network, q):
             for block in data:
                 for tx in block["transactions"]:
                     assert tx["nonce"] >= query.start_nonce
@@ -136,7 +136,7 @@ class SubsquidQueryEngine(QueryAPI):
             ],
         }
 
-        for data in archive_ingest(self._archive, network, q):
+        for data in gateway_ingest(self._gateway, network, q):
             for block in data:
                 for trace in block["traces"]:
                     assert trace["result"]["address"] == contract
@@ -173,7 +173,7 @@ class SubsquidQueryEngine(QueryAPI):
             "logs": [{"address": address}],
         }
 
-        for data in archive_ingest(self._archive, network, q):
+        for data in gateway_ingest(self._gateway, network, q):
             for block in data:
                 block_number = block["header"]["number"]
                 block_hash = HexBytes(block["header"]["hash"])
@@ -192,17 +192,17 @@ def all_fields(cls: Type[T]) -> T:
     return cast(T, fields)
 
 
-def ensure_range_is_available(archive: Archive, network: str, query: Query):
-    height = archive.get_height(network)
+def ensure_range_is_available(gateway: SubsquidGateway, network: str, query: Query):
+    height = gateway.get_height(network)
     if query["toBlock"] > height:
         range = (query["fromBlock"], query["toBlock"])
         raise DataRangeIsNotAvailable(range, height)
 
 
-def archive_ingest(archive: Archive, network: str, query: Query) -> Iterator[list[Block]]:
-    ensure_range_is_available(archive, network, query)
+def gateway_ingest(gateway: SubsquidGateway, network: str, query: Query) -> Iterator[list[Block]]:
+    ensure_range_is_available(gateway, network, query)
     while True:
-        data = archive.query(network, query)
+        data = gateway.query(network, query)
         yield data
 
         last_block = data[-1]["header"]["number"]

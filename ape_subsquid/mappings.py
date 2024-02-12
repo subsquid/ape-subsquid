@@ -1,6 +1,6 @@
 from hexbytes import HexBytes
 
-from ape_subsquid.archive import BlockHeader, Log, Transaction
+from ape_subsquid.gateway import BlockHeader, Log, Transaction
 from ape_subsquid.utils import hex_to_int
 
 

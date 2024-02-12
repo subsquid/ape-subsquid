@@ -236,7 +236,7 @@ class Block(TypedDict, total=False):
 T = TypeVar("T")
 
 
-class Archive:
+class SubsquidGateway:
     _session = Session()
     _retry_schedule = [5, 10, 20, 30, 60]
 
@@ -274,7 +274,7 @@ class Archive:
                 if self._is_retryable_error(e) and retries < len(self._retry_schedule):
                     pause = self._retry_schedule[retries]
                     retries += 1
-                    logger.warning(f"Archive request failed, will retry in {pause} secs")
+                    logger.warning(f"Gateway request failed, will retry in {pause} secs")
                     sleep(pause)
                 else:
                     self._raise_error(e)
