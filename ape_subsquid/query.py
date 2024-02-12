@@ -1,5 +1,6 @@
 from typing import Iterator, Optional, Type, TypeVar, cast
 
+from ape import networks
 from ape.api import BlockAPI, ReceiptAPI
 from ape.api.query import (
     AccountTransactionQuery,
@@ -215,7 +216,7 @@ def gateway_ingest(gateway: SubsquidGateway, network: str, query: Query) -> Iter
         query["fromBlock"] = last_block + 1
 
 
-def get_gateway_height(network_manager) -> int:
-    network = get_network(network_manager)
+def get_network_height() -> int:
+    network = get_network(networks)
     height = gateway.get_height(network)
     return height
