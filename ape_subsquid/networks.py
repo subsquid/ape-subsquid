@@ -1,9 +1,9 @@
-from ape.api.query import QueryAPI
+from ape.managers.networks import NetworkManager
 
 
-def get_network(engine: QueryAPI) -> str:
-    ecosystem_name = engine.network_manager.ecosystem.name
-    network_name = engine.network_manager.network.name
+def get_network(network_manager: NetworkManager) -> str:
+    ecosystem_name = network_manager.ecosystem.name
+    network_name = network_manager.network.name
 
     if ecosystem_name == "bsc":
         ecosystem_name = "binance"

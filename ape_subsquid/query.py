@@ -1,5 +1,6 @@
 from typing import Iterator, Optional, Type, TypeVar, cast
 
+from ape import networks
 from ape.api import BlockAPI, ReceiptAPI
 from ape.api.query import (
     AccountTransactionQuery,
@@ -23,13 +24,14 @@ from ape_subsquid.gateway import (
     Query,
     SubsquidGateway,
     TxFieldSelection,
+    gateway,
 )
 from ape_subsquid.mappings import map_header, map_log, map_receipt
 from ape_subsquid.networks import get_network
 
 
 class SubsquidQueryEngine(QueryAPI):
-    _gateway = SubsquidGateway()
+    _gateway = gateway
 
     @singledispatchmethod
     def estimate_query(self, query: QueryType) -> Optional[int]:  # type: ignore[override]
@@ -61,7 +63,7 @@ class SubsquidQueryEngine(QueryAPI):
 
     @perform_query.register
     def perform_block_query(self, query: BlockQuery) -> Iterator[BlockAPI]:
-        network = get_network(self)
+        network = get_network(self.network_manager)
         q: Query = {
             "fromBlock": query.start_block,
             "toBlock": query.stop_block,
@@ -79,7 +81,7 @@ class SubsquidQueryEngine(QueryAPI):
     def perform_account_transaction_query(
         self, query: AccountTransactionQuery
     ) -> Iterator[ReceiptAPI]:
-        network = get_network(self)
+        network = get_network(self.network_manager)
         q: Query = {
             "fromBlock": 0,
             "fields": {
@@ -118,7 +120,7 @@ class SubsquidQueryEngine(QueryAPI):
 
     @perform_query.register
     def perform_contract_creation_query(self, query: ContractCreationQuery) -> Iterator[ReceiptAPI]:
-        network = get_network(self)
+        network = get_network(self.network_manager)
         contract = query.contract.lower()
         q: Query = {
             "fromBlock": query.start_block,
@@ -160,7 +162,7 @@ class SubsquidQueryEngine(QueryAPI):
 
     @perform_query.register
     def perform_contract_event_query(self, query: ContractEventQuery) -> Iterator[ContractLog]:
-        network = get_network(self)
+        network = get_network(self.network_manager)
         if isinstance(query.contract, list):
             address = [address.lower() for address in query.contract]
         else:
@@ -212,3 +214,9 @@ def gateway_ingest(gateway: SubsquidGateway, network: str, query: Query) -> Iter
                 break
 
         query["fromBlock"] = last_block + 1
+
+
+def get_network_height() -> int:
+    network = get_network(networks)
+    height = gateway.get_height(network)
+    return height
