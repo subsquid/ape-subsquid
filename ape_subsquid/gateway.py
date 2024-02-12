@@ -294,3 +294,6 @@ class SubsquidGateway:
             raise DataIsNotAvailable(text)
         else:
             raise ApeSubsquidError(text)
+
+
+gateway = SubsquidGateway()

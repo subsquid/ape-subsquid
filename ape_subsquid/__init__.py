@@ -1,6 +1,8 @@
 from ape import plugins
 
-from ape_subsquid.query import SubsquidQueryEngine
+from ape_subsquid.query import SubsquidQueryEngine, get_gateway_height
+
+__all__ = ["exceptions", "get_gateway_height"]
 
 
 @plugins.register(plugins.QueryPlugin)
