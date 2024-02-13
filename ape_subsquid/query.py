@@ -37,7 +37,11 @@ class SubsquidQueryEngine(QueryAPI):
         return None
 
     @estimate_query.register
-    def estimate_block_query(self, query: BlockQuery) -> int:
+    def estimate_block_query(self, query: BlockQuery) -> Optional[int]:
+        network = get_network(self.network_manager)
+        if not block_is_available(self._gateway, network, query.stop_block):
+            return None
+
         return 100 + (query.stop_block - query.start_block) * 4
 
     @estimate_query.register
@@ -47,11 +51,19 @@ class SubsquidQueryEngine(QueryAPI):
         return 1000 * 60 * 10
 
     @estimate_query.register
-    def estimate_contract_creation_query(self, query: ContractCreationQuery) -> int:
+    def estimate_contract_creation_query(self, query: ContractCreationQuery) -> Optional[int]:
+        network = get_network(self.network_manager)
+        if not block_is_available(self._gateway, network, query.stop_block):
+            return None
+
         return 100 + (query.stop_block - query.start_block) * 5
 
     @estimate_query.register
-    def estimate_contract_event_query(self, query: ContractEventQuery) -> int:
+    def estimate_contract_event_query(self, query: ContractEventQuery) -> Optional[int]:
+        network = get_network(self.network_manager)
+        if not block_is_available(self._gateway, network, query.stop_block):
+            return None
+
         return 400 + (query.stop_block - query.start_block) * 4
 
     @singledispatchmethod
@@ -191,6 +203,17 @@ def all_fields(cls: Type[T]) -> T:
     for field in fields:
         fields[field] = True
     return cast(T, fields)
+
+
+def block_is_available(gateway: SubsquidGateway, network: str, block_num: int) -> bool:
+    try:
+        height = gateway.get_height(network, max_retries=0)
+    except Exception:
+        return False
+    else:
+        if block_num > height:
+            return False
+    return True
 
 
 def ensure_range_is_available(gateway: SubsquidGateway, network: str, query: Query):

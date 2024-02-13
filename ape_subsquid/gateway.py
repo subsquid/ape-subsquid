@@ -241,11 +241,11 @@ class SubsquidGateway:
     _retry_schedule = [5, 10, 20, 30, 60]
 
     @ttl_cache(seconds=30)
-    def get_height(self, network: str) -> int:
-        return self._retry(self._get_height, network)
+    def get_height(self, network: str, **kwargs) -> int:
+        return self._retry(self._get_height, network, **kwargs)
 
-    def query(self, network: str, query: Query) -> list[Block]:
-        return self._retry(self._query, network, query)
+    def query(self, network: str, query: Query, **kwargs) -> list[Block]:
+        return self._retry(self._query, network, query, **kwargs)
 
     def _query(self, network: str, query: Query) -> list[Block]:
         worker_url = self._get_worker(network, query["fromBlock"])
@@ -267,12 +267,13 @@ class SubsquidGateway:
 
     def _retry(self, request: Callable[..., T], *args, **kwargs) -> T:
         retries = 0
+        max_retries = kwargs.pop("max_retries", len(self._retry_schedule))
         while True:
             try:
                 response = request(*args, **kwargs)
             except HTTPError as e:
-                if self._is_retryable_error(e) and retries < len(self._retry_schedule):
-                    pause = self._retry_schedule[retries]
+                if self._is_retryable_error(e) and retries < max_retries:
+                    pause = self._get_retry_pause(retries)
                     retries += 1
                     logger.warning(f"Gateway request failed, will retry in {pause} secs")
                     sleep(pause)
@@ -280,6 +281,12 @@ class SubsquidGateway:
                     self._raise_error(e)
             else:
                 return response
+
+    def _get_retry_pause(self, retries: int) -> int:
+        if retries < len(self._retry_schedule):
+            return self._retry_schedule[retries]
+        else:
+            return self._retry_schedule[-1]
 
     def _is_retryable_error(self, error: HTTPError) -> bool:
         assert error.response is not None
