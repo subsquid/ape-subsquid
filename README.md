@@ -1,6 +1,6 @@
 # Quick Start
 
-This plugin allows to use [subsquid data lake](https://docs.subsquid.io/subsquid-network/overview/) as a backend for ApeWorX query engine. A list of supported networks can be found [here](https://docs.subsquid.io/subsquid-network/reference/evm-networks/).
+This plugin allows to use [subsquid data lake](https://docs.subsquid.io/subsquid-network/overview/) as a backend for ApeWorX query engine. [Full documentation](https://docs.subsquid.io/apeworx/)
 
 ## Dependencies
 
