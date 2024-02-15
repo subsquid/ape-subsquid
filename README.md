@@ -8,22 +8,19 @@ This plugin allows to use [subsquid data lake](https://docs.subsquid.io/subsquid
 
 ## Installation
 
-### via `pip`
-
-You can install the latest release via [`pip`](https://pypi.org/project/pip/):
+### via `ape plugins`
 
 ```bash
-pip install ape-subsquid
+ape plugins install "ape-subsquid@git+https://github.com/subsquid/ape-subsquid.git@main"
 ```
 
-### via `setuptools`
+### via `pip` locally
 
-You can clone the repository and use [`setuptools`](https://github.com/pypa/setuptools) for the most up-to-date version:
+You can clone the repository and install the plugin locally:
 
 ```bash
 git clone https://github.com/subsquid/ape-subsquid.git
-cd ape-subsquid
-python3 setup.py install
+pip install ./ape-subsquid
 ```
 
 ## Quick Usage
